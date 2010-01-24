@@ -419,6 +419,8 @@ ohci_s3c2410_start (struct usb_hcd *hcd)
 	if ((ret = ohci_init(ohci)) < 0)
 		return ret;
 
+	ohci->num_ports = 1;
+
 	if ((ret = ohci_run (ohci)) < 0) {
 		err ("can't start %s", hcd->self.bus_name);
 		ohci_stop (hcd);
