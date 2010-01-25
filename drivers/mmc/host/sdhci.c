@@ -86,6 +86,14 @@ static void sdhci_dumpregs(struct sdhci_host *host)
 	printk(KERN_DEBUG DRIVER_NAME ": ===========================================\n");
 }
 
+static inline u32 sdhci_card_present(struct sdhci_host *host)
+{
+	if (host->ops->get_card_present)
+		return host->ops->get_card_present(host);
+	else
+		return sdhci_readl(host, SDHCI_PRESENT_STATE) & SDHCI_CARD_PRESENT;
+}
+
 /*****************************************************************************\
  *                                                                           *
  * Low level functions                                                       *
@@ -142,8 +150,7 @@ static void sdhci_reset(struct sdhci_host *host, u8 mask)
 	u32 uninitialized_var(ier);
 
 	if (host->quirks & SDHCI_QUIRK_NO_CARD_NO_RESET) {
-		if (!(sdhci_readl(host, SDHCI_PRESENT_STATE) &
-			SDHCI_CARD_PRESENT))
+		if (!sdhci_card_present(host))
 			return;
 	}
 
@@ -1103,8 +1110,7 @@ static void sdhci_request(struct mmc_host *mmc, struct mmc_request *mrq)
 	if (host->quirks & SDHCI_QUIRK_BROKEN_CARD_DETECTION)
 		present = true;
 	else
-		present = sdhci_readl(host, SDHCI_PRESENT_STATE) &
-				SDHCI_CARD_PRESENT;
+		present = sdhci_card_present(host);
 
 	if (!present || host->flags & SDHCI_DEVICE_DEAD) {
 		host->mrq->cmd->error = -ENOMEDIUM;
@@ -1184,14 +1190,19 @@ static int sdhci_get_ro(struct mmc_host *mmc)
 
 	if (host->flags & SDHCI_DEVICE_DEAD)
 		present = 0;
-	else
-		present = sdhci_readl(host, SDHCI_PRESENT_STATE);
+	else {
+		if (host->ops->get_write_protect)
+			present = host->ops->get_write_protect(host);
+		else
+			present = sdhci_readl(host, SDHCI_PRESENT_STATE)
+				& SDHCI_WRITE_PROTECT;
+	}
 
 	spin_unlock_irqrestore(&host->lock, flags);
 
 	if (host->quirks & SDHCI_QUIRK_INVERTED_WRITE_PROTECT)
-		return !!(present & SDHCI_WRITE_PROTECT);
-	return !(present & SDHCI_WRITE_PROTECT);
+		return !!present;
+	return !present;
 }
 
 static void sdhci_enable_sdio_irq(struct mmc_host *mmc, int enable)
@@ -1238,7 +1249,7 @@ static void sdhci_tasklet_card(unsigned long param)
 
 	spin_lock_irqsave(&host->lock, flags);
 
-	if (!(sdhci_readl(host, SDHCI_PRESENT_STATE) & SDHCI_CARD_PRESENT)) {
+	if (!sdhci_card_present(host)) {
 		if (host->mrq) {
 			printk(KERN_ERR "%s: Card removed during transfer!\n",
 				mmc_hostname(host->mmc));

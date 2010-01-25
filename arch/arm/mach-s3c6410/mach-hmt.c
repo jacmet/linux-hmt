@@ -236,6 +236,7 @@ static struct platform_device *hmt_devices[] __initdata = {
 	&s3c_device_usb,
 	&s3c_device_timer[1],
 	&s3c_device_usb_hsotg,
+	&s3c_device_hsmmc1,
 	&hmt_backlight_device,
 	&hmt_leds_device,
 };

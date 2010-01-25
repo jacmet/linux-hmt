@@ -18,6 +18,14 @@
 #include <linux/clk.h>
 #include <linux/io.h>
 
+#define HMT
+
+#ifdef HMT
+#include <linux/gpio.h>
+#include <asm/irq.h>
+#include <asm/mach/irq.h>
+#endif
+
 #include <linux/mmc/host.h>
 
 #include <plat/sdhci.h>
@@ -208,10 +216,33 @@ static void sdhci_s3c_set_clock(struct sdhci_host *host, unsigned int clock)
 	}
 }
 
+static int hmt_card_detect(struct sdhci_host *host)
+{
+	return !gpio_get_value(S3C64XX_GPN(10));
+}
+
+static int hmt_write_protect(struct sdhci_host *host)
+{
+	return gpio_get_value(S3C64XX_GPL(9));
+}
+
+static irqreturn_t hmt_card_detect_isr(int irq, void *dev)
+{
+	struct sdhci_host *host = dev;
+
+	printk(KERN_ERR "hmt_card_detect_isr, cd=%d\n",
+	       gpio_get_value(S3C64XX_GPN(10)));
+
+	tasklet_schedule(&host->card_tasklet);
+	return IRQ_HANDLED;
+}
+
 static struct sdhci_ops sdhci_s3c_ops = {
 	.get_max_clock		= sdhci_s3c_get_max_clk,
 	.get_timeout_clock	= sdhci_s3c_get_timeout_clk,
 	.set_clock		= sdhci_s3c_set_clock,
+	.get_card_present	= hmt_card_detect,
+	.get_write_protect	= hmt_write_protect,
 };
 
 static int __devinit sdhci_s3c_probe(struct platform_device *pdev)
@@ -347,6 +378,9 @@ static int __devinit sdhci_s3c_probe(struct platform_device *pdev)
 		dev_err(dev, "sdhci_add_host() failed\n");
 		goto err_add_host;
 	}
+
+	request_irq(gpio_to_irq(S3C64XX_GPN(10)), hmt_card_detect_isr,
+				IRQ_TYPE_EDGE_BOTH, "sdmmc1-cd", host);
 
 	return 0;
 

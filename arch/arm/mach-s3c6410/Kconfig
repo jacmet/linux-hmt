@@ -102,7 +102,11 @@ config MACH_HMT
 	select CPU_S3C6410
 	select S3C_DEV_FB
 	select S3C_DEV_NAND
+	select S3C_DEV_HSMMC
+	select S3C_DEV_HSMMC1
 	select S3C_DEV_USB_HOST
+	select S3C_DEV_USB_HSOTG
+	select S3C6410_SETUP_SDHCI
 	select S3C64XX_SETUP_FB_24BPP
 	select HAVE_PWM
 	help
